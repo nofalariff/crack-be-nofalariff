@@ -1,6 +1,6 @@
 // Skema Prisma — LogiSend API
 // Model data ditambahkan bertahap mengikuti milestone B2–B7 (lihat planbackend.md §5).
-// B1 hanya menyiapkan koneksi database untuk PrismaService dan /health.
+// B2: users, agent_profiles, refresh_tokens.
 
 generator client {
   provider = "prisma-client-js"
@@ -9,4 +9,72 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  AGENT
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  phone        String
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  agentProfile  AgentProfile?
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model AgentProfile {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  companyName     String
+  companyAddress  String
+  picName         String
+  picPhone        String
+  npwp            String?
+  approvalStatus  ApprovalStatus @default(PENDING)
+  rejectionReason String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([approvalStatus, createdAt])
+  @@map("agent_profiles")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }

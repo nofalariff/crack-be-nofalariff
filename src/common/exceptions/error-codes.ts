@@ -4,11 +4,11 @@ import { HttpStatus } from '@nestjs/common';
 export const ERROR_CODES = {
   AUTH_INVALID_CREDENTIALS: {
     status: HttpStatus.UNAUTHORIZED,
-    message: 'Email atau kata sandi salah.',
+    message: 'Email atau password salah.',
   },
   AUTH_ACCOUNT_SUSPENDED: {
     status: HttpStatus.FORBIDDEN,
-    message: 'Akun Anda telah dinonaktifkan.',
+    message: 'Akun Anda sedang ditangguhkan.',
   },
   AGENT_NOT_APPROVED: {
     status: HttpStatus.FORBIDDEN,
@@ -64,11 +64,15 @@ export const ERROR_CODES = {
   },
   UNAUTHORIZED: {
     status: HttpStatus.UNAUTHORIZED,
-    message: 'Anda harus masuk untuk mengakses ini.',
+    message: 'Sesi Anda sudah berakhir.',
   },
   FORBIDDEN: {
     status: HttpStatus.FORBIDDEN,
     message: 'Anda tidak memiliki akses untuk melakukan ini.',
+  },
+  RATE_LIMITED: {
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    message: 'Terlalu banyak permintaan. Coba lagi beberapa saat lagi.',
   },
   INTERNAL_ERROR: {
     status: HttpStatus.INTERNAL_SERVER_ERROR,

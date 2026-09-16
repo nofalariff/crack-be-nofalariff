@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { envValidationSchema } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
+import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -24,11 +28,20 @@ import { HealthModule } from './health/health.module';
     ]),
     PrismaModule,
     HealthModule,
+    AuthModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: AppThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
   ],
 })

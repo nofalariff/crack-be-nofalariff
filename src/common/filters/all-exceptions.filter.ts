@@ -19,6 +19,7 @@ const STATUS_FALLBACK_CODE: Partial<Record<number, ErrorCode>> = {
   [HttpStatus.UNAUTHORIZED]: 'UNAUTHORIZED',
   [HttpStatus.FORBIDDEN]: 'FORBIDDEN',
   [HttpStatus.NOT_FOUND]: 'NOT_FOUND',
+  [HttpStatus.TOO_MANY_REQUESTS]: 'RATE_LIMITED',
 };
 
 @Catch()

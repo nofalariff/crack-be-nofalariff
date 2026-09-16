@@ -32,4 +32,14 @@ export default tseslint.config(
       "prettier/prettier": ["error", { endOfLine: "auto" }],
     },
   },
+  {
+    // Body respons supertest selalu `any` — anotasi per akses tidak menambah
+    // keamanan berarti untuk asersi tes.
+    files: ['test/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+    },
+  },
 );
