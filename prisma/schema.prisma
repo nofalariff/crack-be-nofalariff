@@ -1,0 +1,12 @@
+// Skema Prisma — LogiSend API
+// Model data ditambahkan bertahap mengikuti milestone B2–B7 (lihat planbackend.md §5).
+// B1 hanya menyiapkan koneksi database untuk PrismaService dan /health.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
