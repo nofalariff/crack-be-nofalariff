@@ -6,6 +6,8 @@ import { envValidationSchema } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
+import { RoutesModule } from './routes/routes.module';
+import { RatesModule } from './rates/rates.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -29,6 +31,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     PrismaModule,
     HealthModule,
     AuthModule,
+    RoutesModule,
+    RatesModule,
   ],
   providers: [
     {

@@ -1,6 +1,7 @@
 // Skema Prisma — LogiSend API
 // Model data ditambahkan bertahap mengikuti milestone B2–B7 (lihat planbackend.md §5).
 // B2: users, agent_profiles, refresh_tokens.
+// B3: routes, rates.
 
 generator client {
   provider = "prisma-client-js"
@@ -77,4 +78,42 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+enum ServiceType {
+  PORT_TO_PORT
+  PORT_TO_DOOR
+}
+
+model Route {
+  id                String      @id @default(cuid())
+  serviceType       ServiceType
+  destinationCode   String
+  destinationName   String
+  destinationRegion String
+  estimatedDays     Int
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  rates Rate[]
+
+  @@unique([serviceType, destinationCode])
+  @@map("routes")
+}
+
+model Rate {
+  id                  String   @id @default(cuid())
+  routeId             String
+  pricePerKg          BigInt
+  minChargeableWeight Int
+  baseFee             BigInt
+  isActive            Boolean  @default(true)
+  effectiveFrom       DateTime @default(now())
+  createdAt           DateTime @default(now())
+
+  route Route @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([routeId, isActive])
+  @@map("rates")
 }

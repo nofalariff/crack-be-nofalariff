@@ -16,15 +16,15 @@ export const ERROR_CODES = {
   },
   ROUTE_NOT_SERVED: {
     status: HttpStatus.NOT_FOUND,
-    message: 'Rute untuk kombinasi layanan dan tujuan ini tidak tersedia.',
+    message: 'Rute ini belum kami layani.',
   },
   ROUTE_INACTIVE: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Rute ini sedang tidak aktif.',
+    message: 'Rute ini sedang tidak tersedia.',
   },
   WEIGHT_EXCEEDS_LIMIT: {
     status: HttpStatus.BAD_REQUEST,
-    message: 'Berat melebihi batas maksimum 1.000 kg.',
+    message: 'Berat melebihi batas 1000 kg per kiriman.',
   },
   SHIPMENT_INVALID_TRANSITION: {
     status: HttpStatus.UNPROCESSABLE_ENTITY,
