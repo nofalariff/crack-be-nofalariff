@@ -42,6 +42,8 @@ model User {
 
   agentProfile  AgentProfile?
   refreshTokens RefreshToken[]
+  recipients    Recipient[]
+  shipments     Shipment[]
 
   @@map("users")
 }
@@ -96,7 +98,8 @@ model Route {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  rates Rate[]
+  rates     Rate[]
+  shipments Shipment[]
 
   @@unique([serviceType, destinationCode])
   @@map("routes")
@@ -116,4 +119,129 @@ model Rate {
 
   @@index([routeId, isActive])
   @@map("rates")
+}
+
+enum ShipmentStatus {
+  PENDING_PAYMENT
+  PAID
+  RECEIVED_AT_WAREHOUSE
+  IN_TRANSIT
+  ARRIVED_AT_DESTINATION
+  READY_FOR_PICKUP
+  OUT_FOR_DELIVERY
+  DELIVERED
+  ON_HOLD
+  CANCELLED
+}
+
+enum ShipmentPaymentStatus {
+  UNPAID
+  WAITING_VERIFICATION
+  PAID
+}
+
+// Buku alamat. Tidak pernah direferensikan oleh shipments — data penerima
+// disalin saat booking (planbackend.md §5.3.1), sehingga menghapus entri di
+// sini tidak mengubah kiriman yang sudah jalan.
+model Recipient {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String?
+  name       String
+  phone      String
+  address    String
+  city       String
+  postalCode String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("recipients")
+}
+
+model Shipment {
+  id             String                @id @default(cuid())
+  userId         String
+  routeId        String
+  trackingNumber String                @unique
+  serviceType    ServiceType
+  status         ShipmentStatus        @default(PENDING_PAYMENT)
+  previousStatus ShipmentStatus?
+  paymentStatus  ShipmentPaymentStatus @default(UNPAID)
+
+  // Disalin dari rute saat booking agar perubahan master data tidak
+  // mengubah kiriman yang sudah terbit.
+  destinationCode String
+  destinationName String
+  estimatedDays   Int
+
+  senderName          String
+  senderPhone         String
+  recipientName       String
+  recipientPhone      String
+  recipientAddress    String
+  recipientCity       String
+  recipientPostalCode String?
+
+  declaredWeight   Float
+  actualWeight     Float?
+  chargeableWeight Int
+  totalColli       Int
+
+  // Snapshot tarif — tagihan yang sudah terbit tidak boleh berubah (§5.3.2).
+  pricePerKgSnapshot BigInt
+  baseFeeSnapshot    BigInt
+  totalAmount        BigInt
+  outstandingAmount  BigInt
+
+  notes        String?
+  cancelReason String?
+  deliveredTo  String?
+
+  prohibitedItemsAgreedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User            @relation(fields: [userId], references: [id])
+  route  Route           @relation(fields: [routeId], references: [id])
+  items  ShipmentItem[]
+  events ShipmentEvent[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([routeId, status])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id            String   @id @default(cuid())
+  shipmentId    String
+  description   String
+  quantity      Int
+  weight        Float
+  declaredValue BigInt?
+  createdAt     DateTime @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@map("shipment_items")
+}
+
+// Append-only: tidak pernah di-update atau dihapus dari kode aplikasi.
+// Koreksi dilakukan dengan menambah event baru (§5.3.3).
+model ShipmentEvent {
+  id         String         @id @default(cuid())
+  shipmentId String
+  status     ShipmentStatus
+  location   String?
+  notes      String?
+  createdAt  DateTime       @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, createdAt(sort: Desc)])
+  @@map("shipment_events")
 }

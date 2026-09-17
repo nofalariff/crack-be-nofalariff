@@ -8,6 +8,9 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { RoutesModule } from './routes/routes.module';
 import { RatesModule } from './rates/rates.module';
+import { ShipmentsModule } from './shipments/shipments.module';
+import { UsersModule } from './users/users.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -33,6 +36,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuthModule,
     RoutesModule,
     RatesModule,
+    ShipmentsModule,
+    UsersModule,
+    DashboardModule,
   ],
   providers: [
     {

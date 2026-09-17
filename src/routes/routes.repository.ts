@@ -68,6 +68,24 @@ export class RoutesRepository {
     });
   }
 
+  // Kiriman yang belum selesai pada sebuah rute (§6.5). Dihitung sekali untuk
+  // seluruh rute agar daftar admin tidak memicu query per baris.
+  async countActiveShipmentsPerRoute(): Promise<Map<string, number>> {
+    const grouped = await this.prisma.shipment.groupBy({
+      by: ['routeId'],
+      where: { status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+      _count: { _all: true },
+    });
+
+    return new Map(grouped.map((row) => [row.routeId, row._count._all]));
+  }
+
+  countActiveShipmentsForRoute(routeId: string): Promise<number> {
+    return this.prisma.shipment.count({
+      where: { routeId, status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+    });
+  }
+
   // Menonaktifkan tarif aktif lama (bila ada) dan membuat baris tarif baru
   // dalam satu transaksi — riwayat tarif dipertahankan (planbackend.md §5.5).
   async setRate(

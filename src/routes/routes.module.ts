@@ -7,6 +7,6 @@ import { RoutesService } from './routes.service';
 @Module({
   controllers: [RoutesController, AdminRoutesController],
   providers: [RoutesService, RoutesRepository],
-  exports: [RoutesRepository],
+  exports: [RoutesRepository, RoutesService],
 })
 export class RoutesModule {}

@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ServiceType } from '@prisma/client';
-import { calculateTariff } from '../common/utils/money';
 import { DomainException } from '../common/exceptions/domain.exception';
-import { RoutesRepository } from '../routes/routes.repository';
+import { calculateTariff } from '../common/utils/money';
+import { RoutesService } from '../routes/routes.service';
 import { CalculateRateDto } from './dto/calculate-rate.dto';
 
-const MAX_WEIGHT_KG = 1000;
+export const MAX_WEIGHT_KG = 1000;
 
 export interface RateCalculationView {
   serviceType: ServiceType;
@@ -22,7 +22,7 @@ export interface RateCalculationView {
 
 @Injectable()
 export class RatesService {
-  constructor(private readonly routesRepo: RoutesRepository) {}
+  constructor(private readonly routesService: RoutesService) {}
 
   async calculate(dto: CalculateRateDto): Promise<RateCalculationView> {
     if (!dto.weight || dto.weight <= 0) {
@@ -39,27 +39,8 @@ export class RatesService {
       );
     }
 
-    const route = await this.routesRepo.findByServiceAndCode(
-      dto.serviceType,
-      dto.destinationCode,
-    );
-    if (!route) {
-      throw new DomainException(
-        'ROUTE_NOT_SERVED',
-        'Rute ini belum kami layani.',
-      );
-    }
-    if (!route.isActive) {
-      throw new DomainException(
-        'ROUTE_INACTIVE',
-        'Rute ini sedang tidak tersedia.',
-      );
-    }
-
-    const activeRate = route.rates[0];
-    const pricePerKg = activeRate?.pricePerKg ?? 0n;
-    const minChargeableWeight = activeRate?.minChargeableWeight ?? 1;
-    const baseFee = activeRate?.baseFee ?? 0n;
+    const { route, pricePerKg, minChargeableWeight, baseFee } =
+      await this.routesService.getPricing(dto.serviceType, dto.destinationCode);
 
     const { chargeableWeight, weightFee, total } = calculateTariff({
       weightKg: dto.weight,

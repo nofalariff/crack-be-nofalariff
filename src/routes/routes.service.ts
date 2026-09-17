@@ -23,6 +23,13 @@ export interface AdminRouteView extends RouteView {
   activeShipmentCount: number;
 }
 
+export interface RoutePricing {
+  route: RouteWithActiveRate;
+  pricePerKg: bigint;
+  minChargeableWeight: number;
+  baseFee: bigint;
+}
+
 @Injectable()
 export class RoutesService {
   constructor(private readonly repo: RoutesRepository) {}
@@ -33,8 +40,54 @@ export class RoutesService {
   }
 
   async listForAdmin(): Promise<AdminRouteView[]> {
-    const routes = await this.repo.findAllForAdmin();
-    return routes.map((route) => this.toAdminRouteView(route));
+    const [routes, activeCounts] = await Promise.all([
+      this.repo.findAllForAdmin(),
+      this.repo.countActiveShipmentsPerRoute(),
+    ]);
+
+    return routes.map((route) =>
+      this.toAdminRouteView(route, activeCounts.get(route.id) ?? 0),
+    );
+  }
+
+  // Satu-satunya tempat rute diterjemahkan menjadi tarif yang dapat dipakai —
+  // dipakai kalkulator ongkir dan booking agar aturannya tidak bercabang.
+  async getPricing(
+    serviceType: ServiceType,
+    destinationCode: string,
+  ): Promise<RoutePricing> {
+    const route = await this.repo.findByServiceAndCode(
+      serviceType,
+      destinationCode,
+    );
+    if (!route) {
+      throw new DomainException(
+        'ROUTE_NOT_SERVED',
+        'Rute ini belum kami layani.',
+      );
+    }
+    if (!route.isActive) {
+      throw new DomainException(
+        'ROUTE_INACTIVE',
+        'Rute ini sedang tidak tersedia.',
+      );
+    }
+
+    // Rute tanpa tarif aktif dianggap belum dilayani (planbackend.md §6.3).
+    const activeRate = route.rates[0];
+    if (!activeRate) {
+      throw new DomainException(
+        'ROUTE_NOT_SERVED',
+        'Rute ini belum kami layani.',
+      );
+    }
+
+    return {
+      route,
+      pricePerKg: activeRate.pricePerKg,
+      minChargeableWeight: activeRate.minChargeableWeight,
+      baseFee: activeRate.baseFee,
+    };
   }
 
   async create(dto: CreateRouteDto): Promise<AdminRouteView> {
@@ -51,7 +104,7 @@ export class RoutesService {
     }
 
     const route = await this.repo.create(dto);
-    return this.toAdminRouteView(route);
+    return this.toAdminRouteView(route, 0);
   }
 
   async update(id: string, dto: UpdateRouteDto): Promise<AdminRouteView> {
@@ -75,7 +128,10 @@ export class RoutesService {
         ? await this.repo.update(id, data)
         : existing;
 
-    return this.toAdminRouteView(route);
+    return this.toAdminRouteView(
+      route,
+      await this.repo.countActiveShipmentsForRoute(id),
+    );
   }
 
   async setRate(id: string, dto: SetRateDto): Promise<AdminRouteView> {
@@ -93,7 +149,10 @@ export class RoutesService {
       minChargeableWeight: dto.minChargeableWeight,
       baseFee: BigInt(dto.baseFee),
     });
-    return this.toAdminRouteView(route);
+    return this.toAdminRouteView(
+      route,
+      await this.repo.countActiveShipmentsForRoute(id),
+    );
   }
 
   private async getOrThrow(id: string): Promise<RouteWithActiveRate> {
@@ -120,11 +179,13 @@ export class RoutesService {
     };
   }
 
-  private toAdminRouteView(route: RouteWithActiveRate): AdminRouteView {
+  private toAdminRouteView(
+    route: RouteWithActiveRate,
+    activeShipmentCount: number,
+  ): AdminRouteView {
     return {
       ...this.toRouteView(route),
-      // Dihitung dari data kiriman sungguhan mulai milestone B4.
-      activeShipmentCount: 0,
+      activeShipmentCount,
     };
   }
 }
