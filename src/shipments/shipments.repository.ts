@@ -5,8 +5,9 @@ import { ShipmentWithRelations } from './shipment.view';
 
 const withRelations = {
   items: { orderBy: { createdAt: 'asc' } },
-  // Riwayat ditampilkan terbaru lebih dulu.
+  // Riwayat dan pembayaran ditampilkan terbaru lebih dulu.
   events: { orderBy: { createdAt: 'desc' } },
+  payments: { orderBy: { createdAt: 'desc' }, include: { attachment: true } },
 } satisfies Prisma.ShipmentInclude;
 
 export interface CreateShipmentData {

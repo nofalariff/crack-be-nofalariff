@@ -65,6 +65,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       };
     }
 
+    // Multer memutus unggahan yang melewati batas sebelum sampai ke service,
+    // jadi kode domainnya dipetakan di sini.
+    if (isFileTooLargeError(exception)) {
+      return {
+        status: ERROR_CODES.FILE_TOO_LARGE.status,
+        code: 'FILE_TOO_LARGE',
+        message: 'Ukuran berkas melebihi 5 MB.',
+      };
+    }
+
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const code = STATUS_FALLBACK_CODE[status] ?? 'INTERNAL_ERROR';
@@ -81,4 +91,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message: ERROR_CODES.INTERNAL_ERROR.message,
     };
   }
+}
+
+function isFileTooLargeError(exception: unknown): boolean {
+  return (
+    typeof exception === 'object' &&
+    exception !== null &&
+    'code' in exception &&
+    exception.code === 'LIMIT_FILE_SIZE'
+  );
 }

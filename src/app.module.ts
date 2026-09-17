@@ -11,6 +11,9 @@ import { RatesModule } from './rates/rates.module';
 import { ShipmentsModule } from './shipments/shipments.module';
 import { UsersModule } from './users/users.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { StorageModule } from './storage/storage.module';
+import { PaymentsModule } from './payments/payments.module';
+import { FilesModule } from './files/files.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -36,9 +39,12 @@ import { RolesGuard } from './common/guards/roles.guard';
     AuthModule,
     RoutesModule,
     RatesModule,
+    StorageModule,
     ShipmentsModule,
     UsersModule,
     DashboardModule,
+    PaymentsModule,
+    FilesModule,
   ],
   providers: [
     {

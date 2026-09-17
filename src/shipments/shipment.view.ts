@@ -6,6 +6,11 @@ import {
   ShipmentPaymentStatus,
   ShipmentStatus,
 } from '@prisma/client';
+import {
+  PaymentView,
+  PaymentWithAttachment,
+  toPaymentView,
+} from '../payments/payment.view';
 
 // Bentuk response mengikuti `src/types/api.ts` di repo frontend (§1.2).
 // `userId` dan `previousStatus` sengaja tidak ikut: keduanya milik internal
@@ -61,12 +66,13 @@ export interface ShipmentDetailView extends ShipmentSummaryView {
   estimatedDays: number;
   items: ShipmentItemView[];
   events: ShipmentEventView[];
-  payments: unknown[];
+  payments: PaymentView[];
 }
 
 export type ShipmentWithRelations = Shipment & {
   items: ShipmentItem[];
   events: ShipmentEvent[];
+  payments: PaymentWithAttachment[];
 };
 
 export function toShipmentSummary(shipment: Shipment): ShipmentSummaryView {
@@ -122,7 +128,6 @@ export function toShipmentDetail(
       notes: event.notes,
       createdAt: event.createdAt,
     })),
-    // Diisi mulai milestone B5 saat model payments dibuat.
-    payments: [],
+    payments: shipment.payments.map((payment) => toPaymentView(payment)),
   };
 }

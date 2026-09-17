@@ -44,6 +44,7 @@ model User {
   refreshTokens RefreshToken[]
   recipients    Recipient[]
   shipments     Shipment[]
+  attachments   Attachment[]
 
   @@map("users")
 }
@@ -206,8 +207,9 @@ model Shipment {
 
   user   User            @relation(fields: [userId], references: [id])
   route  Route           @relation(fields: [routeId], references: [id])
-  items  ShipmentItem[]
-  events ShipmentEvent[]
+  items    ShipmentItem[]
+  events   ShipmentEvent[]
+  payments Payment[]
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
@@ -244,4 +246,51 @@ model ShipmentEvent {
 
   @@index([shipmentId, createdAt(sort: Desc)])
   @@map("shipment_events")
+}
+
+enum PaymentRecordStatus {
+  WAITING_VERIFICATION
+  VERIFIED
+  REJECTED
+}
+
+// Metadata berkas saja — isinya disimpan lewat StorageService, bukan di
+// database (planbackend.md §5.2). `storageKey` adalah nama acak yang
+// digenerate server; nama asli hanya disimpan sebagai metadata (§8.3).
+model Attachment {
+  id           String   @id @default(cuid())
+  storageKey   String   @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy User     @relation(fields: [uploadedById], references: [id])
+  payment    Payment?
+
+  @@index([uploadedById])
+  @@map("attachments")
+}
+
+// Boleh lebih dari satu per kiriman; hanya satu yang boleh VERIFIED (§5.2).
+model Payment {
+  id                String              @id @default(cuid())
+  shipmentId        String
+  attachmentId      String              @unique
+  claimedAmount     BigInt
+  senderAccountName String
+  transferDate      DateTime
+  status            PaymentRecordStatus @default(WAITING_VERIFICATION)
+  rejectionReason   String?
+  verifiedAt        DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  shipment   Shipment   @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  attachment Attachment @relation(fields: [attachmentId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([shipmentId, createdAt(sort: Desc)])
+  @@map("payments")
 }
