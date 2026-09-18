@@ -31,4 +31,11 @@ export const envValidationSchema = Joi.object({
   ADMIN_PASSWORD: Joi.string().min(8).required(),
 
   SWAGGER_ENABLED: Joi.boolean().default(true),
+
+  // Batas rate limit per menit per IP (planbackend.md §8.3). Nilai bawaannya
+  // untuk production; longgarkan saat menjalankan E2E frontend yang paralel.
+  RATE_LIMIT_LOGIN: Joi.number().positive().default(5),
+  RATE_LIMIT_REGISTER: Joi.number().positive().default(3),
+  RATE_LIMIT_RATE_CALCULATOR: Joi.number().positive().default(30),
+  RATE_LIMIT_DEFAULT: Joi.number().positive().default(100),
 });

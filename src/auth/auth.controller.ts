@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { RATE_LIMITS } from '../common/utils/rate-limit';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { AuthService } from './auth.service';
@@ -27,7 +28,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: RATE_LIMITS.register })
   @Post('register')
   @ApiOperation({ summary: 'Registrasi customer (B2C) — tanpa token' })
   register(@Body() dto: RegisterCustomerDto) {
@@ -35,7 +36,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Throttle({ default: RATE_LIMITS.register })
   @Post('register/agent')
   @ApiOperation({ summary: 'Registrasi agen (B2B) — tanpa token' })
   registerAgent(@Body() dto: RegisterAgentDto) {
@@ -43,7 +44,7 @@ export class AuthController {
   }
 
   @Public()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: RATE_LIMITS.login })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login dan menerbitkan pasangan token' })

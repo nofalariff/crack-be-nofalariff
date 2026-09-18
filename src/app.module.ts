@@ -16,6 +16,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { FilesModule } from './files/files.module';
 import { AuditModule } from './audit/audit.module';
 import { AgentsModule } from './agents/agents.module';
+import { DEFAULT_RATE_LIMIT, ONE_MINUTE_MS } from './common/utils/rate-limit';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -32,8 +33,8 @@ import { RolesGuard } from './common/guards/roles.guard';
         // Batas umum — planbackend.md §8.3; endpoint sensitif (login, register,
         // kalkulator ongkir) menimpa ini dengan @Throttle() per modul.
         name: 'default',
-        ttl: 60_000,
-        limit: 100,
+        ttl: ONE_MINUTE_MS,
+        limit: DEFAULT_RATE_LIMIT,
       },
     ]),
     PrismaModule,
