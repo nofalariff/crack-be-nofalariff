@@ -156,16 +156,22 @@ Tiga aturan yang menjaga lapisannya tetap rapi:
 | Lingkungan | Backend | Database |
 | --- | --- | --- |
 | Development | `bun run start:dev` | PostgreSQL lokal / Docker |
-| Production | Railway | PostgreSQL terkelola |
+| Production | Railway (`railway.json`) | Supabase Postgres + Supabase Storage |
 
 `bun run start:prod` menjalankan `prisma migrate deploy` lebih dulu, sehingga
-migrasi ikut jalan setiap deploy.
+migrasi ikut jalan setiap deploy. Panduan langkah demi langkah ada di
+`DEPLOYMENT.md` pada folder induk proyek.
 
 Untuk production:
 
-- Set `SWAGGER_ENABLED=false`.
+- `DATABASE_URL` memakai pooler Supabase (port 6543, `?pgbouncer=true&connection_limit=1`);
+  `DIRECT_URL` memakai session pooler (port 5432) untuk migrasi.
+- `STORAGE_DRIVER=s3` + kredensial S3 Supabase Storage — disk server Railway
+  terhapus setiap redeploy.
+- Swagger mati secara bawaan; jangan set `SWAGGER_ENABLED=true`.
 - Isi `CORS_ORIGINS` dengan origin frontend yang sebenarnya.
-- Pakai `bun run prisma:seed:minimal` — data contoh tidak ikut.
+- Seed sekali saja dengan `bun run prisma:seed:minimal`. Di `NODE_ENV=production`
+  seed menolak berjalan bila database sudah berisi akun, atau tanpa `--minimal`.
 - Gunakan secret JWT yang panjang dan acak, berbeda antara access dan refresh.
 
 ### Variabel environment

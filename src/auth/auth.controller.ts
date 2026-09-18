@@ -53,6 +53,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: RATE_LIMITS.refresh })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Menerbitkan pasangan token baru (rotasi)' })

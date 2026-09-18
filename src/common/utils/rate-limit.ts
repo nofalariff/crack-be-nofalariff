@@ -24,6 +24,10 @@ export const RATE_LIMITS = {
     ttl: ONE_MINUTE_MS,
     limit: limitFromEnv('RATE_LIMIT_REGISTER', 3),
   },
+  refresh: {
+    ttl: ONE_MINUTE_MS,
+    limit: limitFromEnv('RATE_LIMIT_REFRESH', 20),
+  },
   rateCalculator: {
     ttl: ONE_MINUTE_MS,
     limit: limitFromEnv('RATE_LIMIT_RATE_CALCULATOR', 30),

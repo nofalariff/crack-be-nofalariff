@@ -574,8 +574,31 @@ async function seedOperationalShipments() {
   }
 }
 
+// Seed selalu menghapus seluruh data lebih dulu (clean). Di production itu
+// hanya aman sekali, pada database yang masih kosong — dan hanya mode minimal,
+// karena data contoh memakai kata sandi bersama yang diketahui publik.
+async function assertSafeForProduction(minimal: boolean) {
+  if (process.env.NODE_ENV !== 'production') return;
+
+  if (!minimal) {
+    throw new Error(
+      'Seed lengkap (akun contoh) dilarang di production. Gunakan --minimal.',
+    );
+  }
+  if ((process.env.ADMIN_PASSWORD ?? '').length < 12) {
+    throw new Error('ADMIN_PASSWORD production minimal 12 karakter.');
+  }
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0) {
+    throw new Error(
+      `Database production sudah berisi ${existingUsers} akun — seed dibatalkan agar data tidak terhapus.`,
+    );
+  }
+}
+
 async function main() {
   const minimal = process.argv.includes('--minimal');
+  await assertSafeForProduction(minimal);
 
   console.log(
     minimal

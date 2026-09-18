@@ -1,4 +1,4 @@
-import type { ReadStream } from 'node:fs';
+import type { Readable } from 'node:stream';
 import { Injectable } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { DomainException } from '../common/exceptions/domain.exception';
@@ -6,7 +6,7 @@ import { PaymentsRepository } from '../payments/payments.repository';
 import { StorageService } from '../storage/storage.service';
 
 export interface ServedFile {
-  stream: ReadStream;
+  stream: Readable;
   mimeType: string;
   originalName: string;
   sizeBytes: number;
@@ -39,7 +39,7 @@ export class FilesService {
     }
 
     return {
-      stream: this.storage.createReadStream(attachment.storageKey),
+      stream: await this.storage.openReadStream(attachment.storageKey),
       mimeType: attachment.mimeType,
       originalName: attachment.originalName,
       sizeBytes: attachment.sizeBytes,

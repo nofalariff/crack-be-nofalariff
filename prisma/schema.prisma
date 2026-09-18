@@ -7,9 +7,13 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// DATABASE_URL dipakai aplikasi saat runtime (di Supabase: pooler port 6543,
+// ?pgbouncer=true). DIRECT_URL dipakai Prisma Migrate yang butuh koneksi
+// langsung (port 5432). Di lokal keduanya boleh bernilai sama.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {

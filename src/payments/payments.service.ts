@@ -126,6 +126,7 @@ export class PaymentsService {
     const stored = await this.storage.save(file.buffer, {
       originalName: file.originalname,
       folder: 'payment-proofs',
+      mimeType,
     });
 
     await this.repo.createWithAttachment({
