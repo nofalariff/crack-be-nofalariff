@@ -1,98 +1,194 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# LogiSend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+REST API untuk LogiSend — layanan kargo Port to Port dan Port to Door.
+Dibangun mengikuti [`planbackend.md`](../planbackend.md), menggantikan mock MSW
+yang dipakai frontend [`crack-fe-nofalariff`](../crack-fe-nofalariff).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+| | |
+| --- | --- |
+| **Framework** | NestJS 11 di atas Bun |
+| **Database** | PostgreSQL + Prisma |
+| **Autentikasi** | JWT access + refresh token |
+| **Dokumentasi** | Swagger di `/api/docs` |
+| **Base URL** | `/api/v1` |
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Menjalankan secara lokal
 
-## Project setup
+### 1. Prasyarat
+
+- Bun ≥ 1.3
+- PostgreSQL berjalan, dan sebuah database kosong (mis. `logisend`)
+
+### 2. Siapkan environment
 
 ```bash
-$ bun install
+cp .env.example .env
 ```
 
-## Compile and run the project
+Sesuaikan `DATABASE_URL`, lalu isi `JWT_ACCESS_SECRET` dan `JWT_REFRESH_SECRET`.
+Aplikasi **gagal start** bila ada variabel wajib yang kosong atau tidak valid —
+itu disengaja, supaya salah konfigurasi ketahuan saat boot, bukan saat request
+pertama.
+
+### 3. Pasang dependensi dan siapkan database
 
 ```bash
-# development
-$ bun run start
-
-# watch mode
-$ bun run start:dev
-
-# production mode
-$ bun run start:prod
+bun install
+bunx prisma migrate deploy   # atau: bun run prisma:migrate
+bun run prisma:seed          # data lengkap replika mock frontend
 ```
 
-## Run tests
+### 4. Jalankan
 
 ```bash
-# unit tests
-$ bun run test
-
-# e2e tests
-$ bun run test:e2e
-
-# test coverage
-$ bun run test:cov
+bun run start:dev
 ```
+
+- API: `http://localhost:3001/api/v1`
+- Swagger: `http://localhost:3001/api/docs`
+- Health check: `http://localhost:3001/health`
+
+---
+
+## Data contoh
+
+`bun run prisma:seed` mereplikasi `src/mocks/db.ts` milik frontend: 8 rute
+beserta tarifnya, 10 akun, 40 kiriman yang tersebar di seluruh status, 4
+pembayaran menunggu verifikasi (termasuk satu yang nominal transfernya tidak
+sesuai tagihan), 10 kiriman yang sengaja mandek, dan 2 kiriman `ON_HOLD`.
+
+Tujuannya bukan sekadar kemiripan: dengan data ini, 58 pengujian E2E frontend
+bisa dijalankan ulang terhadap backend asli tanpa mengubah satu pun asersinya.
+Nomor resi milik `budi@example.com` dan `agen@example.com` dipakai sebagai
+asersi di sana — jangan diubah.
+
+```bash
+bun run prisma:seed          # data lengkap untuk pengembangan dan demo
+bun run prisma:seed:minimal  # hanya admin + rute + tarif, untuk production
+```
+
+### Akun uji
+
+Seluruh akun contoh memakai kata sandi **`password123`**.
+
+| Peran | Email | Catatan |
+| --- | --- | --- |
+| Admin | dari `ADMIN_EMAIL` | kata sandi dari `ADMIN_PASSWORD` |
+| Customer | `budi@example.com` | dipakai E2E frontend — jangan ubah kirimannya |
+| Agen disetujui | `agen@example.com` | dipakai E2E frontend |
+| Agen menunggu | `agenbaru@example.com` | harus tetap `PENDING` |
+| Customer | `dewi@example.com`, `rahmat@example.com` | data operasional |
+| Customer ditangguhkan | `nonaktif@example.com` | untuk menguji blokir login |
+| Agen disetujui | `kargo@example.com` | data operasional |
+| Agen menunggu | `agenkedua@example.com` | untuk menguji approval |
+| Agen ditolak | `agenditolak@example.com` | untuk menguji tampilan alasan penolakan |
+
+> Admin sengaja tidak ikut di data mock: kredensialnya diambil dari environment
+> variable (PRD §4.2 — akun admin dibuat lewat seed, bukan registrasi publik).
+> Agar sama persis dengan mock frontend, set `ADMIN_PASSWORD=password123`.
+
+---
+
+## Pengujian
+
+```bash
+bun run lint && bun run typecheck
+bun run test        # unit — tarif, nomor resi, state machine
+bun run test:e2e    # E2E terhadap database sungguhan
+```
+
+E2E memakai database yang sama dengan pengembangan. Setiap suite membuat
+datanya sendiri dengan email dan kode tujuan berakhiran unik, lalu
+membersihkannya kembali, sehingga aman dijalankan berdampingan dengan data
+seed.
+
+---
+
+## Arsitektur
+
+```
+src/
+├── common/          # decorator, guard, filter, interceptor, util, DTO bersama
+├── prisma/          # PrismaService
+├── storage/         # StorageService (driver local; ruang untuk s3)
+├── auth/            # registrasi, login, refresh, profil
+├── users/           # buku alamat + kelola user (admin)
+├── agents/          # approval agen
+├── routes/          # master rute + tarif
+├── rates/           # kalkulator ongkir
+├── shipments/       # booking, daftar, status, koreksi berat, label, manifest
+├── payments/        # invoice, bukti bayar, verifikasi
+├── files/           # penyajian berkas terautentikasi
+├── dashboard/       # ringkasan customer & admin
+└── audit/           # pencatatan & riwayat aksi admin
+```
+
+Tiga aturan yang menjaga lapisannya tetap rapi:
+
+1. **Kata `prisma` hanya muncul di `*.repository.ts` dan `PrismaService`.**
+   Bila muncul di service atau controller, lapisannya bocor.
+2. **Seluruh aturan bisnis ada di service.** Controller hanya menerima DTO,
+   memanggil service, dan menentukan status HTTP.
+3. **Kepemilikan diperiksa di service, bukan hanya lewat role.** Kiriman milik
+   orang lain dibalas `404`, bukan `403`, supaya keberadaan datanya tidak
+   terbaca.
+
+### Hal yang mudah terlewat
+
+- **Nominal uang disimpan sebagai `BigInt`**, tidak pernah dihitung dengan
+  floating point. Konversi ke `number` hanya terjadi di pemetaan response.
+- **Tarif di-snapshot ke kiriman** saat booking (`pricePerKgSnapshot`,
+  `baseFeeSnapshot`, `minChargeableWeightSnapshot`). Mengubah tarif rute tidak
+  pernah mengubah tagihan yang sudah terbit — termasuk saat berat dikoreksi.
+- **`shipment_events` bersifat append-only.** Koreksi dilakukan dengan menambah
+  event baru, bukan mengubah yang lama.
+- **Tipe berkas unggahan diperiksa lewat magic number**, bukan ekstensi atau
+  `Content-Type` dari klien. Nama berkas di disk selalu UUID acak.
+- **Setiap aksi admin yang mengubah keadaan menulis satu baris audit**, dalam
+  transaksi yang sama dengan aksinya.
+
+---
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Lingkungan | Backend | Database |
+| --- | --- | --- |
+| Development | `bun run start:dev` | PostgreSQL lokal / Docker |
+| Production | Railway | PostgreSQL terkelola |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+`bun run start:prod` menjalankan `prisma migrate deploy` lebih dulu, sehingga
+migrasi ikut jalan setiap deploy.
+
+Untuk production:
+
+- Set `SWAGGER_ENABLED=false`.
+- Isi `CORS_ORIGINS` dengan origin frontend yang sebenarnya.
+- Pakai `bun run prisma:seed:minimal` — data contoh tidak ikut.
+- Gunakan secret JWT yang panjang dan acak, berbeda antara access dan refresh.
+
+### Variabel environment
+
+Seluruhnya divalidasi saat boot; lihat [`.env.example`](.env.example) untuk
+daftar lengkap beserta contoh nilainya.
+
+---
+
+## Integrasi dengan frontend
+
+Tipe TypeScript frontend dapat di-generate ulang dari Swagger, sehingga
+perbedaan bentuk response langsung muncul sebagai error TypeScript
+(NFR-MNT-05):
 
 ```bash
-$ bun install -g @nestjs/mau
-$ mau deploy
+# dari repo frontend, dengan backend berjalan
+bunx openapi-typescript http://localhost:3001/api/docs-json -o src/types/api.ts
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Lalu arahkan frontend ke backend asli di `crack-fe-nofalariff/.env.local`:
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+```
+API_URL=http://localhost:3001/api/v1
+NEXT_PUBLIC_API_MOCKING=disabled
+```

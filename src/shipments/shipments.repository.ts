@@ -242,6 +242,34 @@ export class ShipmentsRepository {
     return this.prisma.shipment.findMany({ where: { id: { in: ids } } });
   }
 
+  // Manifest muatan — memanfaatkan indeks [routeId, status] (§5.4).
+  findForManifest(filters: {
+    statuses: ShipmentStatus[];
+    destinationCode?: string;
+    serviceType?: Prisma.ShipmentWhereInput['serviceType'];
+    dateFrom?: Date;
+    dateTo?: Date;
+  }) {
+    return this.prisma.shipment.findMany({
+      where: {
+        status: { in: filters.statuses },
+        ...(filters.destinationCode
+          ? { destinationCode: filters.destinationCode }
+          : {}),
+        ...(filters.serviceType ? { serviceType: filters.serviceType } : {}),
+        ...(filters.dateFrom || filters.dateTo
+          ? {
+              createdAt: {
+                ...(filters.dateFrom ? { gte: filters.dateFrom } : {}),
+                ...(filters.dateTo ? { lte: filters.dateTo } : {}),
+              },
+            }
+          : {}),
+      },
+      orderBy: [{ destinationCode: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
   // Satu transisi status: kiriman + event baru + baris audit dalam satu
   // transaksi (§4.3, §7.3 aturan 4).
   async applyStatusTransition(
@@ -336,7 +364,7 @@ export class ShipmentsRepository {
     return this.prisma.shipment.findMany({
       where: {
         status: { notIn: ['DELIVERED', 'CANCELLED'] },
-        updatedAt: { lt: before },
+        updatedAt: { lte: before },
       },
       include: { user: true },
       orderBy: { updatedAt: 'asc' },
@@ -348,7 +376,7 @@ export class ShipmentsRepository {
     return this.prisma.shipment.count({
       where: {
         status: { notIn: ['DELIVERED', 'CANCELLED'] },
-        updatedAt: { lt: before },
+        updatedAt: { lte: before },
       },
     });
   }

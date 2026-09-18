@@ -18,12 +18,24 @@ import {
 } from './admin-shipment.view';
 import { AdminListShipmentsQueryDto } from './dto/admin-list-shipments-query.dto';
 import { BulkStatusDto } from './dto/bulk-status.dto';
+import { ManifestQueryDto } from './dto/manifest-query.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { WalkInShipmentDto } from './dto/walk-in-shipment.dto';
 import { WeightCorrectionDto } from './dto/weight-correction.dto';
+import {
+  ManifestGroupView,
+  ManifestView,
+  ShipmentLabelView,
+} from './manifest.view';
 import { checkTransition, nextPreviousStatus } from './shipment-status';
 import { ShipmentsService } from './shipments.service';
 import { ShipmentsRepository } from './shipments.repository';
+
+// Manifest bawaan memuat kiriman yang sudah siap berangkat dari gudang.
+const MANIFEST_DEFAULT_STATUSES: ShipmentStatus[] = [
+  'RECEIVED_AT_WAREHOUSE',
+  'IN_TRANSIT',
+];
 
 // Koreksi berat hanya masuk akal selama barang masih di tangan operasional.
 const WEIGHT_CORRECTABLE_STATUSES: ShipmentStatus[] = [
@@ -79,6 +91,109 @@ export class AdminShipmentsService {
   async detail(idOrTrackingNumber: string): Promise<AdminShipmentDetailView> {
     const shipment = await this.findByIdOrTrackingNumber(idOrTrackingNumber);
     return toAdminShipmentDetail(shipment);
+  }
+
+  // Data label untuk ditempel di koli — dicetak di sisi klien.
+  async label(idOrTrackingNumber: string): Promise<ShipmentLabelView> {
+    const shipment = await this.findByIdOrTrackingNumber(idOrTrackingNumber);
+
+    return {
+      trackingNumber: shipment.trackingNumber,
+      serviceType: shipment.serviceType,
+      destinationCode: shipment.destinationCode,
+      destinationName: shipment.destinationName,
+      estimatedDays: shipment.estimatedDays,
+      status: shipment.status,
+      createdAt: shipment.createdAt,
+      sender: { name: shipment.senderName, phone: shipment.senderPhone },
+      recipient: {
+        name: shipment.recipientName,
+        phone: shipment.recipientPhone,
+        address: shipment.recipientAddress,
+        city: shipment.recipientCity,
+        postalCode: shipment.recipientPostalCode,
+      },
+      totalColli: shipment.totalColli,
+      chargeableWeight: shipment.chargeableWeight,
+      declaredWeight: shipment.declaredWeight,
+      actualWeight: shipment.actualWeight,
+      totalAmount: Number(shipment.totalAmount),
+      paymentStatus: shipment.paymentStatus,
+      itemSummary: shipment.items.map((item) => item.description).join(', '),
+      notes: shipment.notes,
+    };
+  }
+
+  // Manifest muatan: kiriman yang siap berangkat, dikelompokkan per tujuan.
+  async manifest(query: ManifestQueryDto): Promise<ManifestView> {
+    const statuses: ShipmentStatus[] = query.status
+      ? [query.status]
+      : MANIFEST_DEFAULT_STATUSES;
+
+    const rows = await this.repo.findForManifest({
+      statuses,
+      destinationCode: query.destinationCode,
+      serviceType: query.serviceType,
+      dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
+      dateTo: query.dateTo ? endOfDay(query.dateTo) : undefined,
+    });
+
+    const groups = new Map<string, ManifestGroupView>();
+    for (const row of rows) {
+      const key = `${row.serviceType}:${row.destinationCode}`;
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          destinationCode: row.destinationCode,
+          destinationName: row.destinationName,
+          serviceType: row.serviceType,
+          shipmentCount: 0,
+          totalColli: 0,
+          totalChargeableWeight: 0,
+          totalAmount: 0,
+          shipments: [],
+        };
+        groups.set(key, group);
+      }
+
+      group.shipmentCount += 1;
+      group.totalColli += row.totalColli;
+      group.totalChargeableWeight += row.chargeableWeight;
+      group.totalAmount += Number(row.totalAmount);
+      group.shipments.push({
+        trackingNumber: row.trackingNumber,
+        status: row.status,
+        senderName: row.senderName,
+        recipientName: row.recipientName,
+        recipientCity: row.recipientCity,
+        totalColli: row.totalColli,
+        chargeableWeight: row.chargeableWeight,
+        totalAmount: Number(row.totalAmount),
+        createdAt: row.createdAt,
+      });
+    }
+
+    const list = [...groups.values()];
+    return {
+      generatedAt: new Date(),
+      filters: {
+        destinationCode: query.destinationCode ?? null,
+        serviceType: query.serviceType ?? null,
+        status: statuses,
+        dateFrom: query.dateFrom ?? null,
+        dateTo: query.dateTo ?? null,
+      },
+      totals: {
+        shipmentCount: rows.length,
+        totalColli: list.reduce((sum, group) => sum + group.totalColli, 0),
+        totalChargeableWeight: list.reduce(
+          (sum, group) => sum + group.totalChargeableWeight,
+          0,
+        ),
+        totalAmount: list.reduce((sum, group) => sum + group.totalAmount, 0),
+      },
+      groups: list,
+    };
   }
 
   async createWalkIn(

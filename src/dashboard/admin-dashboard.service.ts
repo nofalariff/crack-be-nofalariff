@@ -8,6 +8,8 @@ import {
 import { ShipmentsRepository } from '../shipments/shipments.repository';
 
 // Kiriman aktif dianggap mandek bila tidak bergerak lebih dari 3 hari (§6.5).
+// Dihitung dalam hari penuh, sama seperti `daysSinceUpdate` yang tampil di
+// daftar admin: "lebih dari 3 hari" berarti sudah genap 4 hari atau lebih.
 const STALL_THRESHOLD_DAYS = 3;
 const NEEDS_ATTENTION_LIMIT = 8;
 
@@ -30,7 +32,7 @@ export class AdminDashboardService {
 
   async summary(): Promise<AdminDashboardSummaryView> {
     const stalledBefore = new Date(
-      Date.now() - STALL_THRESHOLD_DAYS * 86_400_000,
+      Date.now() - (STALL_THRESHOLD_DAYS + 1) * 86_400_000,
     );
 
     const [

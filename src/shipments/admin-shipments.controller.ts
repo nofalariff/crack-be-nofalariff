@@ -42,6 +42,12 @@ export class AdminShipmentsController {
     return this.adminShipments.createWalkIn(admin.id, dto);
   }
 
+  @Get(':id/label')
+  @ApiOperation({ summary: 'Data label kiriman untuk dicetak' })
+  label(@Param('id') id: string) {
+    return this.adminShipments.label(id);
+  }
+
   // Terdaftar sebelum :id agar tidak tertelan rute detail.
   @Post('bulk-status')
   @HttpCode(HttpStatus.OK)
