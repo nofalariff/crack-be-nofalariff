@@ -9,6 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ListPaymentsQueryDto } from './dto/list-payments-query.dto';
 import { RejectPaymentDto } from './dto/reject-payment.dto';
@@ -30,14 +32,18 @@ export class AdminPaymentsController {
   @Post(':id/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Setujui pembayaran' })
-  verify(@Param('id') id: string) {
-    return this.paymentsService.verify(id);
+  verify(@CurrentUser() admin: AuthenticatedUser, @Param('id') id: string) {
+    return this.paymentsService.verify(admin.id, id);
   }
 
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Tolak pembayaran — alasan minimal 10 karakter' })
-  reject(@Param('id') id: string, @Body() dto: RejectPaymentDto) {
-    return this.paymentsService.reject(id, dto);
+  reject(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: RejectPaymentDto,
+  ) {
+    return this.paymentsService.reject(admin.id, id, dto);
   }
 }

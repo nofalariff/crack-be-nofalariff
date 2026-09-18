@@ -116,6 +116,7 @@ export class ShipmentsService {
       totalColli: dto.totalColli,
       pricePerKgSnapshot: pricing.pricePerKg,
       baseFeeSnapshot: pricing.baseFee,
+      minChargeableWeightSnapshot: pricing.minChargeableWeight,
       totalAmount: tariff.total,
       notes: dto.notes ?? null,
       prohibitedItemsAgreedAt: new Date(),
@@ -253,6 +254,7 @@ export class ShipmentsService {
       totalColli: source.totalColli,
       pricePerKgSnapshot: pricing.pricePerKg,
       baseFeeSnapshot: pricing.baseFee,
+      minChargeableWeightSnapshot: pricing.minChargeableWeight,
       totalAmount: tariff.total,
       notes: source.notes,
       prohibitedItemsAgreedAt: new Date(),
@@ -299,7 +301,8 @@ export class ShipmentsService {
     }
   }
 
-  private async nextTrackingNumber(): Promise<string> {
+  // Dipakai juga oleh booking walk-in dari sisi admin.
+  async nextTrackingNumber(): Promise<string> {
     for (let attempt = 0; attempt < TRACKING_NUMBER_ATTEMPTS; attempt += 1) {
       const candidate = generateTrackingNumber();
       if (!(await this.repo.existsByTrackingNumber(candidate))) {

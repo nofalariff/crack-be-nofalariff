@@ -60,8 +60,15 @@ describe('Routes & Rates (e2e)', () => {
   });
 
   afterAll(async () => {
+    const users = await prisma.user.findMany({
+      where: { email: { endsWith: SUFFIX } },
+      select: { id: true },
+    });
+    const userIds = users.map((user) => user.id);
+
+    await prisma.auditLog.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.route.deleteMany({ where: { destinationCode } });
-    await prisma.user.deleteMany({ where: { email: { endsWith: SUFFIX } } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await app.close();
   });
 

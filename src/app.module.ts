@@ -14,6 +14,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { StorageModule } from './storage/storage.module';
 import { PaymentsModule } from './payments/payments.module';
 import { FilesModule } from './files/files.module';
+import { AuditModule } from './audit/audit.module';
+import { AgentsModule } from './agents/agents.module';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -40,8 +42,10 @@ import { RolesGuard } from './common/guards/roles.guard';
     RoutesModule,
     RatesModule,
     StorageModule,
+    AuditModule,
     ShipmentsModule,
     UsersModule,
+    AgentsModule,
     DashboardModule,
     PaymentsModule,
     FilesModule,

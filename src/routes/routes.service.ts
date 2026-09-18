@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { ServiceType } from '@prisma/client';
 import { DomainException } from '../common/exceptions/domain.exception';
 import { CreateRouteDto } from './dto/create-route.dto';
@@ -32,7 +33,10 @@ export interface RoutePricing {
 
 @Injectable()
 export class RoutesService {
-  constructor(private readonly repo: RoutesRepository) {}
+  constructor(
+    private readonly repo: RoutesRepository,
+    private readonly audit: AuditService,
+  ) {}
 
   async listActive(serviceType?: ServiceType): Promise<RouteView[]> {
     const routes = await this.repo.findActive(serviceType);
@@ -90,7 +94,7 @@ export class RoutesService {
     };
   }
 
-  async create(dto: CreateRouteDto): Promise<AdminRouteView> {
+  async create(adminId: string, dto: CreateRouteDto): Promise<AdminRouteView> {
     const existing = await this.repo.findByServiceAndCode(
       dto.serviceType,
       dto.destinationCode,
@@ -103,11 +107,27 @@ export class RoutesService {
       );
     }
 
-    const route = await this.repo.create(dto);
+    const route = await this.repo.create(dto, (tx, routeId) =>
+      this.audit.record(
+        {
+          action: 'ROUTE_CREATED',
+          actorId: adminId,
+          entityType: 'route',
+          entityId: routeId,
+          entityLabel: `${dto.serviceType} — ${dto.destinationName}`,
+          after: { destinationCode: dto.destinationCode },
+        },
+        tx,
+      ),
+    );
     return this.toAdminRouteView(route, 0);
   }
 
-  async update(id: string, dto: UpdateRouteDto): Promise<AdminRouteView> {
+  async update(
+    adminId: string,
+    id: string,
+    dto: UpdateRouteDto,
+  ): Promise<AdminRouteView> {
     const existing = await this.getOrThrow(id);
 
     const data: {
@@ -125,7 +145,29 @@ export class RoutesService {
 
     const route =
       Object.keys(data).length > 0
-        ? await this.repo.update(id, data)
+        ? await this.repo.update(id, data, (tx) =>
+            this.audit.record(
+              {
+                action: 'ROUTE_UPDATED',
+                actorId: adminId,
+                entityType: 'route',
+                entityId: id,
+                entityLabel: existing.destinationName,
+                before: {
+                  destinationName: existing.destinationName,
+                  estimatedDays: existing.estimatedDays,
+                  isActive: existing.isActive,
+                },
+                after: {
+                  destinationName:
+                    data.destinationName ?? existing.destinationName,
+                  estimatedDays: data.estimatedDays ?? existing.estimatedDays,
+                  isActive: data.isActive ?? existing.isActive,
+                },
+              },
+              tx,
+            ),
+          )
         : existing;
 
     return this.toAdminRouteView(
@@ -134,8 +176,13 @@ export class RoutesService {
     );
   }
 
-  async setRate(id: string, dto: SetRateDto): Promise<AdminRouteView> {
-    await this.getOrThrow(id);
+  async setRate(
+    adminId: string,
+    id: string,
+    dto: SetRateDto,
+  ): Promise<AdminRouteView> {
+    const existing = await this.getOrThrow(id);
+    const previousRate = existing.rates[0];
 
     if (dto.pricePerKg <= 0 || dto.minChargeableWeight <= 0) {
       throw new DomainException(
@@ -144,11 +191,37 @@ export class RoutesService {
       );
     }
 
-    const route = await this.repo.setRate(id, {
-      pricePerKg: BigInt(dto.pricePerKg),
-      minChargeableWeight: dto.minChargeableWeight,
-      baseFee: BigInt(dto.baseFee),
-    });
+    const route = await this.repo.setRate(
+      id,
+      {
+        pricePerKg: BigInt(dto.pricePerKg),
+        minChargeableWeight: dto.minChargeableWeight,
+        baseFee: BigInt(dto.baseFee),
+      },
+      (tx) =>
+        this.audit.record(
+          {
+            action: 'RATE_UPDATED',
+            actorId: adminId,
+            entityType: 'rate',
+            entityId: id,
+            entityLabel: existing.destinationName,
+            before: previousRate
+              ? {
+                  pricePerKg: Number(previousRate.pricePerKg),
+                  minChargeableWeight: previousRate.minChargeableWeight,
+                  baseFee: Number(previousRate.baseFee),
+                }
+              : undefined,
+            after: {
+              pricePerKg: dto.pricePerKg,
+              minChargeableWeight: dto.minChargeableWeight,
+              baseFee: dto.baseFee,
+            },
+          },
+          tx,
+        ),
+    );
     return this.toAdminRouteView(
       route,
       await this.repo.countActiveShipmentsForRoute(id),

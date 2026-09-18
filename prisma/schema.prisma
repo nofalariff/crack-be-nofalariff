@@ -191,10 +191,13 @@ model Shipment {
   totalColli       Int
 
   // Snapshot tarif — tagihan yang sudah terbit tidak boleh berubah (§5.3.2).
-  pricePerKgSnapshot BigInt
-  baseFeeSnapshot    BigInt
-  totalAmount        BigInt
-  outstandingAmount  BigInt
+  // minChargeableWeight ikut di-snapshot agar koreksi berat tidak diam-diam
+  // memakai berat minimum rute yang sudah berubah.
+  pricePerKgSnapshot          BigInt
+  baseFeeSnapshot             BigInt
+  minChargeableWeightSnapshot Int    @default(1)
+  totalAmount                 BigInt
+  outstandingAmount           BigInt
 
   notes        String?
   cancelReason String?
@@ -293,4 +296,40 @@ model Payment {
   @@index([status, createdAt])
   @@index([shipmentId, createdAt(sort: Desc)])
   @@map("payments")
+}
+
+enum AuditAction {
+  SHIPMENT_STATUS_CHANGED
+  SHIPMENT_WEIGHT_CORRECTED
+  SHIPMENT_CREATED_BY_ADMIN
+  PAYMENT_VERIFIED
+  PAYMENT_REJECTED
+  AGENT_APPROVED
+  AGENT_REJECTED
+  USER_STATUS_CHANGED
+  ROUTE_CREATED
+  ROUTE_UPDATED
+  RATE_UPDATED
+}
+
+// Jejak setiap aksi admin yang mengubah keadaan. Nama dan email pelaku
+// disalin (bukan direferensikan) supaya riwayat tetap terbaca meski akunnya
+// berganti nama atau dihapus; actorId tetap disimpan agar bisa disaring.
+model AuditLog {
+  id          String      @id @default(cuid())
+  action      AuditAction
+  actorId     String?
+  actorName   String
+  actorEmail  String
+  entityType  String
+  entityId    String
+  entityLabel String
+  before      Json?
+  after       Json?
+  createdAt   DateTime    @default(now())
+
+  @@index([entityType, entityId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
 }

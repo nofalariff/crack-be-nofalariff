@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { SetRateDto } from './dto/set-rate.dto';
@@ -21,19 +23,27 @@ export class AdminRoutesController {
 
   @Post()
   @ApiOperation({ summary: 'Buat rute baru — tanpa tarif' })
-  create(@Body() dto: CreateRouteDto) {
-    return this.routesService.create(dto);
+  create(@CurrentUser() admin: AuthenticatedUser, @Body() dto: CreateRouteDto) {
+    return this.routesService.create(admin.id, dto);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Ubah data rute' })
-  update(@Param('id') id: string, @Body() dto: UpdateRouteDto) {
-    return this.routesService.update(id, dto);
+  update(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateRouteDto,
+  ) {
+    return this.routesService.update(admin.id, id, dto);
   }
 
   @Put(':id/rate')
   @ApiOperation({ summary: 'Tetapkan tarif baru untuk rute' })
-  setRate(@Param('id') id: string, @Body() dto: SetRateDto) {
-    return this.routesService.setRate(id, dto);
+  setRate(
+    @CurrentUser() admin: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: SetRateDto,
+  ) {
+    return this.routesService.setRate(admin.id, id, dto);
   }
 }

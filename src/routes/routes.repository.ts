@@ -10,6 +10,13 @@ export type RouteWithActiveRate = Prisma.RouteGetPayload<{
   include: typeof withActiveRate;
 }>;
 
+// Pencatatan audit ikut dalam transaksi aksinya, sehingga jejaknya batal juga
+// bila aksinya gagal di tengah jalan (§4.3).
+export type AuditWriter = (
+  tx: Prisma.TransactionClient,
+  routeId: string,
+) => Promise<void>;
+
 @Injectable()
 export class RoutesRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -46,25 +53,37 @@ export class RoutesRepository {
     });
   }
 
-  create(data: {
-    serviceType: ServiceType;
-    destinationCode: string;
-    destinationName: string;
-    destinationRegion: string;
-    estimatedDays: number;
-    isActive?: boolean;
-  }): Promise<RouteWithActiveRate> {
-    return this.prisma.route.create({ data, include: withActiveRate });
+  create(
+    data: {
+      serviceType: ServiceType;
+      destinationCode: string;
+      destinationName: string;
+      destinationRegion: string;
+      estimatedDays: number;
+      isActive?: boolean;
+    },
+    audit: AuditWriter,
+  ): Promise<RouteWithActiveRate> {
+    return this.prisma.$transaction(async (tx) => {
+      const created = await tx.route.create({ data, include: withActiveRate });
+      await audit(tx, created.id);
+      return created;
+    });
   }
 
-  update(
+  async update(
     id: string,
     data: Prisma.RouteUpdateInput,
+    audit: AuditWriter,
   ): Promise<RouteWithActiveRate> {
-    return this.prisma.route.update({
-      where: { id },
-      data,
-      include: withActiveRate,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.route.update({
+        where: { id },
+        data,
+        include: withActiveRate,
+      });
+      await audit(tx, updated.id);
+      return updated;
     });
   }
 
@@ -91,16 +110,16 @@ export class RoutesRepository {
   async setRate(
     routeId: string,
     data: { pricePerKg: bigint; minChargeableWeight: number; baseFee: bigint },
+    audit: AuditWriter,
   ): Promise<RouteWithActiveRate> {
-    await this.prisma.$transaction([
-      this.prisma.rate.updateMany({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rate.updateMany({
         where: { routeId, isActive: true },
         data: { isActive: false },
-      }),
-      this.prisma.rate.create({
-        data: { routeId, ...data, isActive: true },
-      }),
-    ]);
+      });
+      await tx.rate.create({ data: { routeId, ...data, isActive: true } });
+      await audit(tx, routeId);
+    });
 
     return (await this.findById(routeId))!;
   }

@@ -30,9 +30,11 @@ export interface CreateShipmentData {
   totalColli: number;
   pricePerKgSnapshot: bigint;
   baseFeeSnapshot: bigint;
+  minChargeableWeightSnapshot: number;
   totalAmount: bigint;
   notes: string | null;
   prohibitedItemsAgreedAt: Date;
+  initialEventNotes?: string;
   item: {
     description: string;
     quantity: number;
@@ -100,7 +102,7 @@ export class ShipmentsRepository {
   // Booking menyentuh shipments + shipment_items + shipment_events
   // (+ recipients bila disimpan) — wajib satu transaksi (§4.3).
   async create(data: CreateShipmentData): Promise<ShipmentWithRelations> {
-    const { item, saveRecipient, ...shipment } = data;
+    const { item, saveRecipient, initialEventNotes, ...shipment } = data;
 
     return this.prisma.$transaction(async (tx) => {
       const created = await tx.shipment.create({
@@ -111,7 +113,7 @@ export class ShipmentsRepository {
           events: {
             create: {
               status: 'PENDING_PAYMENT',
-              notes: 'Booking dibuat',
+              notes: initialEventNotes ?? 'Booking dibuat',
             },
           },
         },
@@ -193,6 +195,164 @@ export class ShipmentsRepository {
     });
   }
 
+  // --- Sisi admin ---
+
+  findManyForAdmin(
+    filters: {
+      status?: ShipmentStatus;
+      serviceType?: Prisma.ShipmentWhereInput['serviceType'];
+      paymentStatus?: Prisma.ShipmentWhereInput['paymentStatus'];
+      destinationCode?: string;
+      search?: string;
+      trackingNumber?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
+    pagination: { page: number; limit: number },
+  ) {
+    const where = this.buildAdminWhere(filters);
+
+    return this.prisma.$transaction([
+      this.prisma.shipment.findMany({
+        where,
+        include: { user: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (pagination.page - 1) * pagination.limit,
+        take: pagination.limit,
+      }),
+      this.prisma.shipment.count({ where }),
+    ]);
+  }
+
+  findByIdForAdmin(id: string) {
+    return this.prisma.shipment.findUnique({
+      where: { id },
+      include: { ...withRelations, user: true },
+    });
+  }
+
+  findByTrackingNumberForAdmin(trackingNumber: string) {
+    return this.prisma.shipment.findUnique({
+      where: { trackingNumber },
+      include: { ...withRelations, user: true },
+    });
+  }
+
+  findManyByIds(ids: string[]) {
+    return this.prisma.shipment.findMany({ where: { id: { in: ids } } });
+  }
+
+  // Satu transisi status: kiriman + event baru + baris audit dalam satu
+  // transaksi (§4.3, §7.3 aturan 4).
+  async applyStatusTransition(
+    id: string,
+    data: {
+      status: ShipmentStatus;
+      previousStatus?: ShipmentStatus | null;
+      deliveredTo?: string | null;
+      cancelReason?: string | null;
+    },
+    event: { status: ShipmentStatus; notes?: string; location?: string },
+    audit: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.shipment.update({
+        where: { id },
+        data: {
+          ...data,
+          events: {
+            create: {
+              status: event.status,
+              notes: event.notes ?? null,
+              location: event.location ?? null,
+            },
+          },
+        },
+        include: { ...withRelations, user: true },
+      });
+
+      await audit(tx);
+      return updated;
+    });
+  }
+
+  async applyWeightCorrection(
+    id: string,
+    data: {
+      actualWeight: number;
+      chargeableWeight: number;
+      totalAmount: bigint;
+      outstandingAmount: bigint;
+    },
+    event: { notes: string; status: ShipmentStatus } | null,
+    audit: (tx: Prisma.TransactionClient) => Promise<void>,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.shipment.update({
+        where: { id },
+        data: {
+          ...data,
+          ...(event
+            ? {
+                events: {
+                  create: { status: event.status, notes: event.notes },
+                },
+              }
+            : {}),
+        },
+        include: { ...withRelations, user: true },
+      });
+
+      await audit(tx);
+      return updated;
+    });
+  }
+
+  countPendingPaymentVerification(): Promise<number> {
+    return this.prisma.shipment.count({
+      where: { payments: { some: { status: 'WAITING_VERIFICATION' } } },
+    });
+  }
+
+  countAll(): Promise<number> {
+    return this.prisma.shipment.count();
+  }
+
+  countActive(): Promise<number> {
+    return this.prisma.shipment.count({
+      where: { status: { notIn: ['DELIVERED', 'CANCELLED'] } },
+    });
+  }
+
+  countByStatus() {
+    return this.prisma.shipment.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    });
+  }
+
+  // Kiriman aktif yang tidak bergerak lebih dari 3 hari (§6.5).
+  findStalled(before: Date, take?: number) {
+    return this.prisma.shipment.findMany({
+      where: {
+        status: { notIn: ['DELIVERED', 'CANCELLED'] },
+        updatedAt: { lt: before },
+      },
+      include: { user: true },
+      orderBy: { updatedAt: 'asc' },
+      ...(take ? { take } : {}),
+    });
+  }
+
+  countStalled(before: Date): Promise<number> {
+    return this.prisma.shipment.count({
+      where: {
+        status: { notIn: ['DELIVERED', 'CANCELLED'] },
+        updatedAt: { lt: before },
+      },
+    });
+  }
+
   countByStatusForUser(userId: string) {
     return this.prisma.shipment.groupBy({
       by: ['status'],
@@ -237,6 +397,54 @@ export class ShipmentsRepository {
         { trackingNumber: { contains: filters.search, mode: 'insensitive' } },
         { recipientName: { contains: filters.search, mode: 'insensitive' } },
         // Pencarian resi tanpa tanda hubung, mis. "lgs260901k7qmr".
+        ...(filters.trackingNumber
+          ? [{ trackingNumber: filters.trackingNumber }]
+          : []),
+      ];
+    }
+
+    return where;
+  }
+
+  // Pencarian admin lebih luas: resi, pengirim, penerima, nomor HP, dan
+  // email pemesan (FR-ADM-01).
+  private buildAdminWhere(filters: {
+    status?: ShipmentStatus;
+    serviceType?: Prisma.ShipmentWhereInput['serviceType'];
+    paymentStatus?: Prisma.ShipmentWhereInput['paymentStatus'];
+    destinationCode?: string;
+    search?: string;
+    trackingNumber?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  }): Prisma.ShipmentWhereInput {
+    const where: Prisma.ShipmentWhereInput = {};
+
+    if (filters.status) where.status = filters.status;
+    if (filters.serviceType) where.serviceType = filters.serviceType;
+    if (filters.paymentStatus) where.paymentStatus = filters.paymentStatus;
+    if (filters.destinationCode)
+      where.destinationCode = filters.destinationCode;
+
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {
+        ...(filters.dateFrom ? { gte: filters.dateFrom } : {}),
+        ...(filters.dateTo ? { lte: filters.dateTo } : {}),
+      };
+    }
+
+    if (filters.search) {
+      const insensitive = {
+        contains: filters.search,
+        mode: 'insensitive' as const,
+      };
+      where.OR = [
+        { trackingNumber: insensitive },
+        { senderName: insensitive },
+        { recipientName: insensitive },
+        { senderPhone: { contains: filters.search } },
+        { recipientPhone: { contains: filters.search } },
+        { user: { email: insensitive } },
         ...(filters.trackingNumber
           ? [{ trackingNumber: filters.trackingNumber }]
           : []),

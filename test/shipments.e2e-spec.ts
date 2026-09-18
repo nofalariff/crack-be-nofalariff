@@ -125,6 +125,7 @@ describe('Shipments (e2e)', () => {
     });
     const userIds = users.map((user) => user.id);
 
+    await prisma.auditLog.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.shipment.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.recipient.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });

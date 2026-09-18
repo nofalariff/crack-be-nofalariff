@@ -90,12 +90,16 @@ export class PaymentsRepository {
     });
   }
 
-  // Persetujuan menyentuh payments + shipments + shipment_events (§4.3).
-  async verify(data: {
-    paymentId: string;
-    shipmentId: string;
-    appendPaidEvent: boolean;
-  }): Promise<void> {
+  // Persetujuan menyentuh payments + shipments + shipment_events + audit_logs
+  // (§4.3).
+  async verify(
+    data: {
+      paymentId: string;
+      shipmentId: string;
+      appendPaidEvent: boolean;
+    },
+    audit: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: data.paymentId },
@@ -124,15 +128,20 @@ export class PaymentsRepository {
             : {}),
         },
       });
+
+      await audit(tx);
     });
   }
 
   // Penolakan mengembalikan kiriman ke UNPAID agar customer bisa unggah ulang.
-  async reject(data: {
-    paymentId: string;
-    shipmentId: string;
-    reason: string;
-  }): Promise<void> {
+  async reject(
+    data: {
+      paymentId: string;
+      shipmentId: string;
+      reason: string;
+    },
+    audit: (tx: Prisma.TransactionClient) => Promise<void>,
+  ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: data.paymentId },
@@ -143,6 +152,8 @@ export class PaymentsRepository {
         where: { id: data.shipmentId },
         data: { paymentStatus: 'UNPAID' },
       });
+
+      await audit(tx);
     });
   }
 

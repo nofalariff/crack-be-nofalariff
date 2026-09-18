@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { fromBuffer } from 'file-type';
+import { AuditService } from '../audit/audit.service';
 import { AuthRepository } from '../auth/auth.repository';
 import { Paginated } from '../common/dto/pagination-meta';
 import { DomainException } from '../common/exceptions/domain.exception';
@@ -46,6 +47,7 @@ export class PaymentsService {
     private readonly authRepo: AuthRepository,
     private readonly storage: StorageService,
     private readonly config: ConfigService,
+    private readonly audit: AuditService,
   ) {}
 
   async invoiceFor(
@@ -163,7 +165,10 @@ export class PaymentsService {
     };
   }
 
-  async verify(paymentId: string): Promise<ShipmentDetailView> {
+  async verify(
+    adminId: string,
+    paymentId: string,
+  ): Promise<ShipmentDetailView> {
     const payment = await this.getPaymentOrThrow(paymentId);
 
     // Idempoten: menyetujui ulang ditolak, bukan menggandakan event (§7.4).
@@ -186,16 +191,35 @@ export class PaymentsService {
       );
     }
 
-    await this.repo.verify({
-      paymentId: payment.id,
-      shipmentId: payment.shipmentId,
-      appendPaidEvent: payment.shipment.status === 'PENDING_PAYMENT',
-    });
+    await this.repo.verify(
+      {
+        paymentId: payment.id,
+        shipmentId: payment.shipmentId,
+        appendPaidEvent: payment.shipment.status === 'PENDING_PAYMENT',
+      },
+      (tx) =>
+        this.audit.record(
+          {
+            action: 'PAYMENT_VERIFIED',
+            actorId: adminId,
+            entityType: 'payment',
+            entityId: payment.id,
+            entityLabel: payment.shipment.trackingNumber,
+            before: { status: payment.status },
+            after: {
+              status: 'VERIFIED',
+              amount: Number(payment.claimedAmount),
+            },
+          },
+          tx,
+        ),
+    );
 
     return this.reloadDetail(payment.shipment.userId, payment.shipmentId);
   }
 
   async reject(
+    adminId: string,
     paymentId: string,
     dto: RejectPaymentDto,
   ): Promise<ShipmentDetailView> {
@@ -219,11 +243,26 @@ export class PaymentsService {
       );
     }
 
-    await this.repo.reject({
-      paymentId: payment.id,
-      shipmentId: payment.shipmentId,
-      reason,
-    });
+    await this.repo.reject(
+      {
+        paymentId: payment.id,
+        shipmentId: payment.shipmentId,
+        reason,
+      },
+      (tx) =>
+        this.audit.record(
+          {
+            action: 'PAYMENT_REJECTED',
+            actorId: adminId,
+            entityType: 'payment',
+            entityId: payment.id,
+            entityLabel: payment.shipment.trackingNumber,
+            before: { status: payment.status },
+            after: { status: 'REJECTED', reason },
+          },
+          tx,
+        ),
+    );
 
     return this.reloadDetail(payment.shipment.userId, payment.shipmentId);
   }

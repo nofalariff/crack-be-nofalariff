@@ -144,6 +144,7 @@ describe('Payments (e2e)', () => {
       ),
     );
 
+    await prisma.auditLog.deleteMany({ where: { actorId: { in: userIds } } });
     await prisma.shipment.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.attachment.deleteMany({
       where: { uploadedById: { in: userIds } },
