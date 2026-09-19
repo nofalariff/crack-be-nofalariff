@@ -45,6 +45,10 @@ export class StorageService implements OnModuleInit {
           secretAccessKey: this.config.getOrThrow<string>('STORAGE_SECRET'),
         },
         forcePathStyle: true,
+        // SDK v3 terbaru selalu menambah checksum CRC32; layanan S3-compatible
+        // seperti Supabase Storage tidak selalu mendukungnya.
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
       });
     }
   }
