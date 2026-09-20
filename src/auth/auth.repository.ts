@@ -13,8 +13,12 @@ export class AuthRepository {
     });
   }
 
-  findUserById(id: string) {
-    return this.prisma.user.findUnique({
+  // Menerima client transaksi: dipanggil dari dalam transaksi, query ini harus
+  // memakai koneksi yang sama. Lewat pooler dengan connection_limit=1, memakai
+  // koneksi lain berarti menunggu koneksi yang dipegang transaksi itu sendiri
+  // sampai transaksinya kedaluwarsa.
+  findUserById(id: string, tx?: Prisma.TransactionClient) {
+    return (tx ?? this.prisma).user.findUnique({
       where: { id },
       include: { agentProfile: true },
     });

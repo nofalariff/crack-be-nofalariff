@@ -41,7 +41,7 @@ export class AuditService {
     input: RecordAuditInput,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
-    const actor = await this.authRepo.findUserById(input.actorId);
+    const actor = await this.authRepo.findUserById(input.actorId, tx);
 
     await this.repo.create(
       {
