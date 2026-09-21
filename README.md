@@ -4,13 +4,19 @@ REST API untuk LogiSend — layanan kargo Port to Port dan Port to Door.
 Dibangun mengikuti [`planbackend.md`](../planbackend.md), menggantikan mock MSW
 yang dipakai frontend [`crack-fe-nofalariff`](../crack-fe-nofalariff).
 
-| | |
-| --- | --- |
-| **Framework** | NestJS 11 di atas Bun |
-| **Database** | PostgreSQL + Prisma |
-| **Autentikasi** | JWT access + refresh token |
-| **Dokumentasi** | Swagger di `/api/docs` |
-| **Base URL** | `/api/v1` |
+|                  |                                                              |
+| ---------------- | ------------------------------------------------------------ |
+| **Production**   | https://crack-be-nofalariff-production.up.railway.app/api/v1 |
+| **Health check** | https://crack-be-nofalariff-production.up.railway.app/health |
+| **Frontend**     | https://crack-fe-nofalariff.vercel.app                       |
+| **Framework**    | NestJS 11 di atas Bun                                        |
+| **Database**     | PostgreSQL + Prisma (Supabase di production)                 |
+| **Autentikasi**  | JWT access + refresh token                                   |
+| **Dokumentasi**  | Swagger di `/api/docs` — hanya saat development              |
+| **Base URL**     | `/api/v1`                                                    |
+
+API hanya dipanggil dari server Next.js, tidak pernah langsung dari browser,
+sehingga `CORS_ORIGINS` cukup berisi domain frontend.
 
 ---
 
@@ -73,21 +79,165 @@ bun run prisma:seed:minimal  # hanya admin + rute + tarif, untuk production
 
 Seluruh akun contoh memakai kata sandi **`password123`**.
 
-| Peran | Email | Catatan |
-| --- | --- | --- |
-| Admin | dari `ADMIN_EMAIL` | kata sandi dari `ADMIN_PASSWORD` |
-| Customer | `budi@example.com` | dipakai E2E frontend — jangan ubah kirimannya |
-| Agen disetujui | `agen@example.com` | dipakai E2E frontend |
-| Agen menunggu | `agenbaru@example.com` | harus tetap `PENDING` |
-| Customer | `dewi@example.com`, `rahmat@example.com` | data operasional |
-| Customer ditangguhkan | `nonaktif@example.com` | untuk menguji blokir login |
-| Agen disetujui | `kargo@example.com` | data operasional |
-| Agen menunggu | `agenkedua@example.com` | untuk menguji approval |
-| Agen ditolak | `agenditolak@example.com` | untuk menguji tampilan alasan penolakan |
+| Peran                 | Email                                    | Catatan                                       |
+| --------------------- | ---------------------------------------- | --------------------------------------------- |
+| Admin                 | dari `ADMIN_EMAIL`                       | kata sandi dari `ADMIN_PASSWORD`              |
+| Customer              | `budi@example.com`                       | dipakai E2E frontend — jangan ubah kirimannya |
+| Agen disetujui        | `agen@example.com`                       | dipakai E2E frontend                          |
+| Agen menunggu         | `agenbaru@example.com`                   | harus tetap `PENDING`                         |
+| Customer              | `dewi@example.com`, `rahmat@example.com` | data operasional                              |
+| Customer ditangguhkan | `nonaktif@example.com`                   | untuk menguji blokir login                    |
+| Agen disetujui        | `kargo@example.com`                      | data operasional                              |
+| Agen menunggu         | `agenkedua@example.com`                  | untuk menguji approval                        |
+| Agen ditolak          | `agenditolak@example.com`                | untuk menguji tampilan alasan penolakan       |
 
 > Admin sengaja tidak ikut di data mock: kredensialnya diambil dari environment
 > variable (PRD §4.2 — akun admin dibuat lewat seed, bukan registrasi publik).
 > Agar sama persis dengan mock frontend, set `ADMIN_PASSWORD=password123`.
+
+---
+
+## Skema database
+
+Sepuluh tabel. Nomor uang disimpan sebagai `BigInt` dalam rupiah penuh, tanpa
+desimal.
+
+```mermaid
+erDiagram
+    users ||--o| agent_profiles : "profil B2B"
+    users ||--o{ refresh_tokens : "sesi aktif"
+    users ||--o{ recipients : "buku alamat"
+    users ||--o{ shipments : "memesan"
+    users ||--o{ attachments : "mengunggah"
+    routes ||--o{ rates : "riwayat tarif"
+    routes ||--o{ shipments : "tujuan"
+    shipments ||--o{ shipment_items : "isi barang"
+    shipments ||--o{ shipment_events : "linimasa"
+    shipments ||--o{ payments : "bukti bayar"
+    attachments ||--o| payments : "berkas bukti"
+
+    users {
+        string id PK
+        string email UK
+        string passwordHash
+        string fullName
+        string phone
+        enum   role "CUSTOMER, AGENT, ADMIN"
+        enum   status "ACTIVE, SUSPENDED"
+    }
+    agent_profiles {
+        string id PK
+        string userId FK,UK
+        string companyName
+        string picName
+        enum   approvalStatus "PENDING, APPROVED, REJECTED"
+        string rejectionReason
+    }
+    refresh_tokens {
+        string   id PK
+        string   userId FK
+        string   tokenHash UK "SHA-256, bukan token mentah"
+        datetime expiresAt
+        datetime revokedAt
+    }
+    recipients {
+        string id PK
+        string userId FK
+        string name
+        string phone
+        string address
+        string city
+    }
+    routes {
+        string id PK
+        enum   serviceType "PORT_TO_PORT, PORT_TO_DOOR"
+        string destinationCode "unik per serviceType"
+        string destinationName
+        int    estimatedDays
+        bool   isActive
+    }
+    rates {
+        string id PK
+        string routeId FK
+        bigint pricePerKg
+        int    minChargeableWeight
+        bigint baseFee
+        bool   isActive
+    }
+    shipments {
+        string id PK
+        string userId FK
+        string routeId FK
+        string trackingNumber UK
+        enum   status "10 status, lihat state machine"
+        enum   paymentStatus "UNPAID, WAITING_VERIFICATION, PAID"
+        string recipientName "disalin saat booking"
+        float  declaredWeight
+        float  actualWeight
+        int    chargeableWeight
+        bigint pricePerKgSnapshot "snapshot tarif"
+        bigint baseFeeSnapshot
+        bigint totalAmount
+        bigint outstandingAmount
+    }
+    shipment_items {
+        string id PK
+        string shipmentId FK
+        string description
+        int    quantity
+        float  weight
+    }
+    shipment_events {
+        string   id PK
+        string   shipmentId FK
+        enum     status
+        string   location
+        datetime createdAt "append-only"
+    }
+    attachments {
+        string id PK
+        string storageKey UK "UUID acak di Supabase Storage"
+        string originalName
+        string mimeType
+        int    sizeBytes
+        string uploadedById FK
+    }
+    payments {
+        string   id PK
+        string   shipmentId FK
+        string   attachmentId FK,UK
+        bigint   claimedAmount
+        string   senderAccountName
+        datetime transferDate
+        enum     status "WAITING_VERIFICATION, VERIFIED, REJECTED"
+    }
+    audit_logs {
+        string id PK
+        enum   action
+        string actorId "tanpa FK — riwayat tetap utuh"
+        string actorName "disalin saat aksi terjadi"
+        string entityType
+        string entityId
+        json   before
+        json   after
+    }
+```
+
+Tiga hal yang sengaja dirancang begitu dan mudah disalahpahami saat membaca
+diagram:
+
+- **`recipients` tidak direferensikan `shipments`.** Data penerima disalin saat
+  booking, sehingga menghapus entri buku alamat tidak mengubah kiriman yang
+  sudah jalan.
+- **`audit_logs` berdiri sendiri tanpa foreign key.** Nama dan email pelaku ikut
+  disalin, supaya riwayat tetap terbaca meski akunnya berganti nama atau
+  dihapus. `actorId` tetap disimpan untuk penyaringan.
+- **`rates` menyimpan riwayat, bukan satu baris per rute.** Tarif lama
+  dinonaktifkan, bukan ditimpa, dan kiriman memakai snapshot miliknya sendiri.
+
+Berkas bukti bayar tidak pernah masuk database: `attachments` hanya menyimpan
+metadata, isinya ada di Supabase Storage dan diambil lewat `GET /files/:id`
+yang memeriksa kepemilikan.
 
 ---
 
@@ -153,10 +303,10 @@ Tiga aturan yang menjaga lapisannya tetap rapi:
 
 ## Deployment
 
-| Lingkungan | Backend | Database |
-| --- | --- | --- |
-| Development | `bun run start:dev` | PostgreSQL lokal / Docker |
-| Production | Railway (`railway.json`) | Supabase Postgres + Supabase Storage |
+| Lingkungan  | Backend                                                                                  | Database                             |
+| ----------- | ---------------------------------------------------------------------------------------- | ------------------------------------ |
+| Development | `bun run start:dev`                                                                      | PostgreSQL lokal / Docker            |
+| Production  | [Railway](https://crack-be-nofalariff-production.up.railway.app/health) (`railway.json`) | Supabase Postgres + Supabase Storage |
 
 `bun run start:prod` menjalankan `prisma migrate deploy` lebih dulu, sehingga
 migrasi ikut jalan setiap deploy. Panduan langkah demi langkah ada di
